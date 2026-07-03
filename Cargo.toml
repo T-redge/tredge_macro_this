@@ -1,0 +1,13 @@
+# Copyright © Viron Software ⨈
+
+[workspace]
+resolver = "2"
+
+members = [
+    "macro_this",
+]
+
+[profile.dev]
+panic = "abort"
+[profile.release]
+panic = "abort"

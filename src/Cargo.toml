@@ -1,0 +1,22 @@
+# Copyright © Viron Software ⨈
+
+[package]
+name = "recrypt_db_factory"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+v_common = { default-features = false, git = "ssh://git@github.com/viron-src/v_common.git", branch = "main", features = [] }
+aws_helpers = { default-features = false, git = "ssh://git@github.com/viron-src/aws_helpers.git", branch = "main", features = [] }
+chrono = { default-features = false, version = "0.4.44", features = ["std", "now", "serde"] }
+futures = { default-features = false, version = "0.3.32", features = ["std", "async-await", "executor"] }
+futures-util = { default-features = false, version = "0.3.32", features = ["std", "async-await", "async-await-macro"] }
+tokio = { default-features = false, version = "1.51.0", features = ["full"] }
+tokio-postgres = { default-features = false, version = "0.7.17", features = ["runtime", "with-chrono-0_4", "with-uuid-1", "array-impls"] }
+postgres-native-tls = { default-features = false, version = "0.5.3", features = ["runtime"] }
+native-tls = { default-features = false, version = "0.2.18", features = [] }
+aws-sdk-rds = { default-features = false, version = "1.130.0", features = ["default-https-client", "rustls", "rt-tokio"] }
+rust_decimal = { default-features = false, version = "1.41.0", features = ["std", "serde", "serde-with-arbitrary-precision", "db-tokio-postgres"] }
+walkdir = { default-features = false, version = "2.5.0", features = [] }
+uuid = { default-features = false, version = "1.23.0", features = ["std", "v4"] }
+socket2 = { default-features = false, version = "0.6.3", features = [] }
