@@ -19,7 +19,7 @@ pub async fn get_void_from_query(query: &Result<Vec<Row>, Error>, file: &'static
         Ok(query) => {
             if query.len() != 1 {
                 let msg = "Unexpected DB response (rows)".to_string();
-                v_common::create_alert_ex(file, line, &msg).await;
+                create_alert_ex(file, line, &msg).await;
                 return Err(msg)
             }
             let db_val = query.first().unwrap();
