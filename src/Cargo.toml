@@ -1,13 +1,11 @@
 # Copyright © Viron Software ⨈
 
 [package]
-name = "recrypt_db_factory"
+name = "macro_this"
 version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-v_common = { default-features = false, git = "ssh://git@github.com/viron-src/v_common.git", branch = "main", features = [] }
-aws_helpers = { default-features = false, git = "ssh://git@github.com/viron-src/aws_helpers.git", branch = "main", features = [] }
 chrono = { default-features = false, version = "0.4.44", features = ["std", "now", "serde"] }
 futures = { default-features = false, version = "0.3.32", features = ["std", "async-await", "executor"] }
 futures-util = { default-features = false, version = "0.3.32", features = ["std", "async-await", "async-await-macro"] }
