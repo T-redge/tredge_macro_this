@@ -9,10 +9,9 @@ use rust_decimal::Decimal;
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 // Dummy function
-async fn create_alert_ex(class: &str, line: u32, message: &str) {
+pub async fn create_alert_ex(class: &str, line: u32, message: &str) {
     eprintln!("SYSTEM ALERT occurred in {}@{}: {}", class, line, message);
 }
-
 pub async fn get_void_from_query(query: &Result<Vec<Row>, Error>, file: &'static str, line: u32) -> Result<(), String> {
     match query {
         Err(err) => Err(handle_error(err, file, line).await),
@@ -12634,7 +12633,7 @@ impl GetDbType for Option<Decimal> {
     }
 }
 
-async fn handle_error(error: &Error, file: &'static str, line: u32) -> String {
+pub async fn handle_error(error: &Error, file: &'static str, line: u32) -> String {
     if error.is_closed() {
         let msg = format!("DB died during query: {:?}", error);
         create_alert_ex(file, line, &msg).await;
