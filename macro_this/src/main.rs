@@ -1,8 +1,9 @@
 use macro_this::data_from_query;
-use tokio_postgres::{types::FromSql, Error, NoTls};
+use tokio_postgres::{Error, NoTls};
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let (client, connection) =
+    /*let (client, connection) =
         tokio_postgres::connect("host=localhost user=postgres dbname=cricket", NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -11,7 +12,7 @@ async fn main() -> Result<(), Error> {
     });
 
     let q = client.query("SELECT * From player", &[]).await;
-    let x = data_from_query!();
+    let q = q.unwrap();*/
 
     Ok(())
 }

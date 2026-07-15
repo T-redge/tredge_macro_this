@@ -1,12 +1,12 @@
 use std::net::{IpAddr};
-use std::ops::Deref;
-use std::sync::Arc;
+
+
 use chrono::{DateTime, Utc};
-use tokio_postgres::{Client, Error, Row};
+use tokio_postgres::{Error, Row};
 use tokio_postgres::types::{FromSql, Type};
 use uuid::Uuid;
 use rust_decimal::Decimal;
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+
 
 // Dummy function
 pub async fn create_alert_ex(class: &str, line: u32, message: &str) {
