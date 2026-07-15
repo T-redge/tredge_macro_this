@@ -2,8 +2,8 @@ use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use tokio_postgres::types::{FromSql, Type};
-use tokio_postgres::{Error, Row};
+use tokio_postgres::types::Type;
+use tokio_postgres::Error;
 use uuid::Uuid;
 
 // Dummy function
