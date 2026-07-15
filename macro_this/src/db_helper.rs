@@ -1,17 +1,16 @@
-use std::net::{IpAddr};
-
+use std::net::IpAddr;
 
 use chrono::{DateTime, Utc};
-use tokio_postgres::{Error, Row};
-use tokio_postgres::types::{FromSql, Type};
-use uuid::Uuid;
 use rust_decimal::Decimal;
-
+use tokio_postgres::types::{FromSql, Type};
+use tokio_postgres::{Error, Row};
+use uuid::Uuid;
 
 // Dummy function
 pub async fn create_alert_ex(class: &str, line: u32, message: &str) {
     eprintln!("SYSTEM ALERT occurred in {}@{}: {}", class, line, message);
 }
+/*
 pub async fn get_void_from_query(query: &Result<Vec<Row>, Error>, file: &'static str, line: u32) -> Result<(), String> {
     match query {
         Err(err) => Err(handle_error(err, file, line).await),
@@ -12520,7 +12519,7 @@ pub async fn get_34_list_from_query<'a,
         }
     }
 }
-
+*/
 pub trait GetDbType {
     fn get_db_type() -> Type;
 }
@@ -12637,7 +12636,7 @@ pub async fn handle_error(error: &Error, file: &'static str, line: u32) -> Strin
     if error.is_closed() {
         let msg = format!("DB died during query: {:?}", error);
         create_alert_ex(file, line, &msg).await;
-        return "DB down".to_string() // This allows vgw-db error to be shown correctly to the frontend if connection died while query in progress.
+        return "DB down".to_string(); // This allows vgw-db error to be shown correctly to the frontend if connection died while query in progress.
     }
     if let Some(code) = error.code() {
         // V**** error codes can be explicitly handled, are application specific

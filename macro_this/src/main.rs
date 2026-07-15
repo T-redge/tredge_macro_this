@@ -1,4 +1,3 @@
-use macro_this::data_from_query;
 use tokio_postgres::{Error, NoTls};
 
 #[tokio::main]
