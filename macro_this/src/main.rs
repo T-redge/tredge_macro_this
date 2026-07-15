@@ -1,5 +1,6 @@
 use macro_this::data_from_query;
-use tokio_postgres::{types::FromSql, Error, NoTls};
+use tokio_postgres::{Error, NoTls};
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let (client, connection) =
@@ -11,7 +12,11 @@ async fn main() -> Result<(), Error> {
     });
 
     let q = client.query("SELECT * From player", &[]).await;
-    let x = data_from_query!();
-
+    data_from_query!(T1, T2, T3);
+    let x: Result<(i32, &str, &str), String> = get_data_from_query(&q, "", 0).await;
+    match x {
+        Err(e) => println!("{e}"),
+        Ok(res) => println!("{res:?}"),
+    }
     Ok(())
 }

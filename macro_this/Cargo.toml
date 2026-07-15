@@ -18,3 +18,4 @@ rust_decimal = { default-features = false, version = "1.41.0", features = ["std"
 walkdir = { default-features = false, version = "2.5.0", features = [] }
 uuid = { default-features = false, version = "1.23.0", features = ["std", "v4"] }
 socket2 = { default-features = false, version = "0.6.3", features = [] }
+proc_macro_this = {path="../proc_macro_this/"}
