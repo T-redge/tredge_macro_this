@@ -12613,7 +12613,16 @@ impl GetDbType for Vec<bool> {
         Type::BOOL_ARRAY
     }
 }
-
+impl GetDbType for String {
+    fn get_db_type() -> Type {
+        Type::VARCHAR
+    }
+}
+impl GetDbType for Vec<Option<String>> {
+    fn get_db_type() -> Type {
+        Type::VARCHAR_ARRAY
+    }
+}
 impl GetDbType for IpAddr {
     fn get_db_type() -> Type {
         Type::INET
