@@ -12613,14 +12613,10 @@ impl GetDbType for Vec<bool> {
         Type::BOOL_ARRAY
     }
 }
+//Had to add because i had used VARCHAR instead of text fields in my DB
 impl GetDbType for String {
     fn get_db_type() -> Type {
         Type::VARCHAR
-    }
-}
-impl GetDbType for Vec<Option<String>> {
-    fn get_db_type() -> Type {
-        Type::VARCHAR_ARRAY
     }
 }
 impl GetDbType for IpAddr {

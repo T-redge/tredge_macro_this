@@ -1,4 +1,4 @@
-use macro_this::{build_tuple, generic_type_checker, get_tuple};
+use macro_this::{build_tuple, flatten_tup, generic_type_checker, get_tuple};
 use tokio_postgres::{Error, NoTls};
 #[tokio::main]
 async fn main() -> Result<(), Error> {
