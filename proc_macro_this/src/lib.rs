@@ -1,10 +1,6 @@
-use proc_macro::TokenStream;
+use proc_macro::{TokenStream, TokenTree};
 
 extern crate proc_macro;
 
-#[proc_macro_attribute]
-pub fn derive_generics(attr: TokenStream, item: TokenStream) -> TokenStream {
-    println!("attr: \"{attr}\"");
-    println!("item: \"{item}\"");
-    item
-}
+#[proc_macro]
+pub fn make_answer(item: TokenStream) -> TokenStream {}
