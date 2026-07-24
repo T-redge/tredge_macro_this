@@ -40,20 +40,21 @@ macro_rules! build_tuple {
         let res: Result<$generic_name, Error> = row.try_get(*i);
         *i += 1;
         match res {
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string() + "build_tuple macro"),
             Ok(val) => val,
         }
     }};
     ($ind:expr,$db_row:expr,$generic_name:ident,$($m_generic_name:ident),*) => {{
         //one value for singular generic
-
+        (build_tuple!($ind,$db_row,$generic_name),
+        build_tuple!($ind,$db_row,$($m_generic_name),*))
         //unwinds one repeat at a time until each generic is accounted for
     }};
 }
 #[macro_export]
 macro_rules! get_tuple {
-    ($($g_name:ident),+ $(,)?) => {
-        use proc_macro_this::make_answer;
+    ($($g_name:ident),+) => {
+        use proc_macro_this::p_macro;
         pub async fn get_data_from_query<'a,$($g_name: $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a> + std::fmt::Debug + Default),+>(
             query: &'a Result<Vec<tokio_postgres::Row>, Error>,
             file: &'static str,
@@ -85,7 +86,9 @@ macro_rules! get_tuple {
                                 //iterates over columns in row without having to write boilerplate
                                 //for each type
                                 let mut i:usize = 0;
-                                make_answer!();
+                                let x = build_tuple!(i,db_row,$($g_name),+);
+                                println!("{x:?}");
+
                             }
                             Ok(())
                         }
