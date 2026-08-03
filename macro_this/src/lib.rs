@@ -78,10 +78,10 @@ macro_rules! get_tuple {
                                 //iterates over columns in row without having to write boilerplate
                                 //for each type
                                 let mut i:usize = 0;
-                                let x = ($(
+                                let row_tuple = ($(
                                     build_tuple!(i,v,db_row,$g_name),
                                 )+);
-                                result.push(x);
+                                result.push(row_tuple);
                             }
                         Ok(result)
                         }
