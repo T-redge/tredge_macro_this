@@ -43,6 +43,7 @@ macro_rules! build_tuple {
         }
     }};
 }
+//Added ability to create the fn name so the macro can be reused without compilation errors
 #[macro_export]
 macro_rules! get_tuple {
     ($fn_name:ident,$($g_name:ident),+) => {
