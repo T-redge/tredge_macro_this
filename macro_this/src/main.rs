@@ -14,8 +14,13 @@ async fn main() -> Result<(), Error> {
     let q = client.query("SELECT * FROM player", &[]).await;
     get_tuple!(T1, T2, T3);
     let res = get_data_from_query::<i32, String, String>(&q, "", 0).await;
-    if let Err(e) = res {
-        println!("{e}");
+    match res {
+        Err(e) => {
+            println!("{e}");
+        }
+        Ok(val) => {
+            println!("{val:?}");
+        }
     }
     Ok(())
 }

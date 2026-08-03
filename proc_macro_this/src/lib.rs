@@ -1,4 +1,4 @@
-use proc_macro::{Ident, TokenStream, TokenTree};
+use proc_macro::{TokenStream, TokenTree};
 
 extern crate proc_macro;
 

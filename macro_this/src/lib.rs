@@ -1,6 +1,5 @@
 // Copyright © Viron Software ⨈
 pub mod db_helper;
-
 #[macro_export]
 macro_rules! generic_type_checker {
     //Checks type for singular generic, returns column name and type on failure
@@ -34,32 +33,25 @@ macro_rules! generic_type_checker {
 //will have to write an impl Trait to take the nested tuple and flatten it
 #[macro_export]
 macro_rules! build_tuple {
-    ($ind:expr,$db_row:expr,$generic_name:ident) => {{
+    ($ind:expr,$vec:tt,$db_row:expr,$generic_name:ident) => {{
         let i: &mut usize = &mut $ind;
         let row: &tokio_postgres::Row = $db_row;
         let res: Result<$generic_name, Error> = row.try_get(*i);
         *i += 1;
         match res {
-            Err(e) => return Err(e.to_string() + "build_tuple macro"),
+            Err(e) => return Err(e.to_string()),
             Ok(val) => val,
         }
-    }};
-    ($ind:expr,$db_row:expr,$generic_name:ident,$($m_generic_name:ident),*) => {{
-        //one value for singular generic
-        (build_tuple!($ind,$db_row,$generic_name),
-        build_tuple!($ind,$db_row,$($m_generic_name),*))
-        //unwinds one repeat at a time until each generic is accounted for
     }};
 }
 #[macro_export]
 macro_rules! get_tuple {
     ($($g_name:ident),+) => {
-        use proc_macro_this::p_macro;
-        pub async fn get_data_from_query<'a,$($g_name: $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a> + std::fmt::Debug + Default),+>(
+        pub async fn get_data_from_query<'a,$($g_name:'static +  $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a> + std::fmt::Debug + Default + Clone),+>(
             query: &'a Result<Vec<tokio_postgres::Row>, Error>,
             file: &'static str,
             line: u32,
-        ) -> Result<(),String>{
+        ) -> Result<Vec<($($g_name),+)>,String>{
             match query {
                 Err(err) => Err($crate::db_helper::handle_error(err,file,line).await),
                 Ok(query) => {
@@ -81,16 +73,17 @@ macro_rules! get_tuple {
                     match type_check {
                         Err(e) => return Err(e),
                         Ok(()) => {
-                            let result: Vec<($($g_name),+)> = Vec::with_capacity(query.len());
+                            let mut result:Vec<($($g_name),+)> = Vec::with_capacity(query.len());
                             for db_row in query {
                                 //iterates over columns in row without having to write boilerplate
                                 //for each type
                                 let mut i:usize = 0;
-                                let x = build_tuple!(i,db_row,$($g_name),+);
-                                println!("{x:?}");
-
+                                let x = ($(
+                                    build_tuple!(i,v,db_row,$g_name),
+                                )+);
+                                result.push(x);
                             }
-                            Ok(())
+                        Ok(result)
                         }
                     }
 
