@@ -12,15 +12,30 @@ async fn main() -> Result<(), Error> {
     });
 
     let q = client.query("SELECT * FROM player", &[]).await;
-    get_tuple!(T1, T2, T3);
-    let res = get_data_from_query::<i32, String, String>(&q, "", 0).await;
+    get_tuple!(get_3_tuple, T1, T2, T3);
+    let res = get_3_tuple::<i32, String, String>(&q, "macro_this/main.rs", 16).await;
     match res {
         Err(e) => {
             println!("{e}");
         }
         Ok(val) => {
-            println!("{val:?}");
+            for row in val {
+                println!("{row:?}");
+            }
         }
     }
+    get_tuple!(get_2_tuple, T1, T2);
+    let res_two = get_2_tuple::<i32, String>(&q, "macro_this/main.rs", 26).await;
+    match res_two {
+        Err(e) => {
+            println!("{e}");
+        }
+        Ok(val) => {
+            for row in val {
+                println!("{row:?}");
+            }
+        }
+    }
+
     Ok(())
 }
