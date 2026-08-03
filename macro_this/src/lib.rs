@@ -28,24 +28,24 @@ macro_rules! generic_type_checker {
         }
     }};
 }
-//builds tuple from repeated generics, however currently creates a nested tuple for each
-
 #[macro_export]
-macro_rules! build_tuple {
+macro_rules! get_column_value {
     ($ind:expr,$db_row:expr,$generic_name:ident) => {{
         let i: &mut usize = &mut $ind;
         let row: &tokio_postgres::Row = $db_row;
         let res: Result<$generic_name, Error> = row.try_get(*i);
-        *i += 1;
         match res {
             Err(e) => return Err(e.to_string()),
-            Ok(val) => val,
+            Ok(val) => {
+                *i += 1;
+                val
+            }
         }
     }};
 }
 //Added ability to create the fn name so the macro can be reused without compilation errors
 #[macro_export]
-macro_rules! get_tuple {
+macro_rules! build_tuple {
     ($fn_name:ident,$($g_name:ident),+) => {
         pub async fn $fn_name<'a,$($g_name:'static +  $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a>),+>(
             query: &'a Result<Vec<tokio_postgres::Row>, Error>,
@@ -79,7 +79,7 @@ macro_rules! get_tuple {
                                 //for each type
                                 let mut i: usize = 0;
                                 let row_tuple = (
-                                    $(build_tuple!(i,db_row,$g_name),)+
+                                    $(get_column_value!(i,db_row,$g_name),)+
                                 );
                                 result.push(row_tuple);
                             }
