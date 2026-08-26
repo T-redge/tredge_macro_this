@@ -43,9 +43,21 @@ macro_rules! get_column_value {
         }
     }};
 }
+//calculates amount of generics
+#[macro_export]
+macro_rules! generic_check {
+    ($g_count:expr,$genric_name:ident) => {
+        $g_count += 1;
+    };
+    ($g_count: expr,$generic_name:ident,$($g_name:ident),+) => {
+        generic_check!($g_count,$generic_name);
+        generic_check!($g_count,$($g_name),+);
+    };
+
+}
 //Added ability to create the fn name so the macro can be reused without compilation errors
 #[macro_export]
-macro_rules! build_tuple {
+macro_rules! build_list {
     ($fn_name:ident,$($g_name:ident),+) => {
         pub async fn $fn_name<'a,$($g_name:'static +  $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a>),+>(
             query: &'a Result<Vec<tokio_postgres::Row>, Error>,
@@ -67,6 +79,13 @@ macro_rules! build_tuple {
                         $crate::db_helper::create_alert_ex(file, line, &msg).await;
                         return Err(msg);
                     }
+                    let mut num_generics = 0;
+                    generic_check!(num_generics,$($g_name),+);
+                    if num_generics < db_val.columns().len() {
+                        let msg = "Unexpected DB response (More columns than generics)".to_string();
+                        $crate::db_helper::create_alert_ex(file,line,&msg).await;
+                        return Err(msg);
+                    }
                     let mut c = db_val.columns().iter();
                     //Ensures Generic types match with database types
                     let type_check = generic_type_checker!(c, $($g_name),+);
@@ -84,6 +103,58 @@ macro_rules! build_tuple {
                                 result.push(row_tuple);
                             }
                         Ok(result)
+                        }
+                    }
+                }
+            }
+        }
+    };
+}
+//For results that only return one row, will return Err for 0 or greater than 1
+#[macro_export]
+macro_rules! build_tuple {
+    ($fn_name:ident,$($g_name:ident),+) => {
+        pub async fn $fn_name<'a,$($g_name:'static +  $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a>),+>(
+            query: &'a Result<Vec<tokio_postgres::Row>, Error>,
+            file: &'static str,
+            line: u32,
+        ) -> Result<($($g_name),+),String>{
+            match query {
+                Err(err) => Err($crate::db_helper::handle_error(err,file,line).await),
+                Ok(query) => {
+                    //Checks query only returns a single row of data
+                    if query.len() != 1 {
+                        let msg = "Unexpected DB response (rows)".to_string();
+                        $crate::db_helper::create_alert_ex(file, line, &msg).await;
+                        return Err(msg)
+                    }
+                    let db_val = query.first().unwrap();
+                    if db_val.columns().len() < 1 {
+                        let msg = "Unexpected DB response (columns)".to_string();
+                        $crate::db_helper::create_alert_ex(file, line, &msg).await;
+                        return Err(msg);
+                    }
+                    let mut num_generics = 0;
+                    generic_check!(num_generics,$($g_name),+);
+                    if num_generics < db_val.columns().len() {
+                        let msg = "Unexpected DB response (More columns than generics)".to_string();
+                        $crate::db_helper::create_alert_ex(file,line,&msg).await;
+                        return Err(msg);
+                    }
+
+                    let mut c = db_val.columns().iter();
+                    //Ensures Generic types match with database types
+                    let type_check = generic_type_checker!(c, $($g_name),+);
+                    match type_check {
+                        Err(e) => return Err(e),
+                        Ok(()) => {
+                            //iterates over columns in row without having to write boilerplate
+                            //for each type
+                            let mut i: usize = 0;
+                            let row_tuple = (
+                                $(get_column_value!(i,db_val,$g_name),)+
+                            );
+                        Ok(row_tuple)
                         }
                     }
                 }

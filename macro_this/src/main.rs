@@ -1,4 +1,4 @@
-use macro_this::{build_tuple, generic_type_checker, get_column_value};
+use macro_this::{build_list, build_tuple, generic_check, generic_type_checker, get_column_value};
 use tokio_postgres::{Error, NoTls};
 
 #[tokio::main]
@@ -11,31 +11,20 @@ async fn main() -> Result<(), Error> {
         }
     });
 
-    let q = client.query("SELECT * FROM player", &[]).await;
-    build_tuple!(get_3_tuple, T1, T2, T3);
-    let res = get_3_tuple::<i32, String, String>(&q, "macro_this/main.rs", 16).await;
-    match res {
-        Err(e) => {
-            println!("{e}");
-        }
-        Ok(val) => {
-            for row in val {
-                println!("{row:?}");
-            }
-        }
-    }
-    build_tuple!(get_2_tuple, T1, T2);
-    let res_two = get_2_tuple::<i32, String>(&q, "macro_this/main.rs", 26).await;
-    match res_two {
-        Err(e) => {
-            println!("{e}");
-        }
-        Ok(val) => {
-            for row in val {
-                println!("{row:?}");
-            }
-        }
-    }
+    let q1 = client.query("SELECT * FROM player", &[]).await;
+    build_list!(get_3_list, T1, T2, T3);
+    let res_one = get_3_list::<i32, String, String>(&q1, "macro_this/main.rs", 16).await;
+    let res_one = res_one.unwrap_or_default();
 
+    println!("{:?}", res_one);
+
+    let q2 = client
+        .query("SELECT * FROM player WHERE player_id = 1", &[])
+        .await;
+    build_tuple!(get_3_tuple, T1, T2, T3);
+    let res_two = get_3_tuple::<i32, String, String>(&q2, "macro_this/main.rs", 23).await;
+    let res_two = res_two.unwrap_or_default();
+
+    println!("{:?}", res_two);
     Ok(())
 }
