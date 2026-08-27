@@ -1,65 +1,50 @@
 // Copyright © Viron Software ⨈
 pub mod db_helper;
-#[macro_export]
+
 macro_rules! generic_type_checker {
-    //Checks type for singular generic, returns column name and type on failure
     ($col:expr, $generic_name:ident) => {{
-        //typing the $col makes sure that is the type that is passed into the function
         let col: &tokio_postgres::Column = $col.next().unwrap();
         if *col.type_() != $generic_name::get_db_type() {
-            let name: &str = col.name();
-            let t: String = col.type_().to_string();
-            Err(name.to_string() + ":" + &t)
+            Err(format!("Unexpected DB response (column types: received {}, expected {})", col.type_(), $generic_name::get_db_type()))
         } else {
             Ok(())
         }
+
     }};
-    //unfolds repeating variables to enable checking a singular generic if one fails it doesnt
-    //continue unraveling and returns error
     ($col:expr, $generic_name:ident, $($m_generic_name:ident),+) => {{
         match generic_type_checker!($col, $generic_name) {
-            Err(e) => return Err(e),
-            Ok(()) => match generic_type_checker!($col, $($m_generic_name),+) {
-                Err(e) => return Err(e),
-                Ok(()) => {
-                    Ok(())
-                }
-            }
+            Err(e) => Err(e),
+            Ok(()) => generic_type_checker!($col, $($m_generic_name),+)
         }
     }};
 }
-#[macro_export]
+
 macro_rules! get_column_value {
     ($ind:expr,$db_row:expr,$generic_name:ident) => {{
-        let i: &mut usize = &mut $ind;
-        let row: &tokio_postgres::Row = $db_row;
-        let res: Result<$generic_name, Error> = row.try_get(*i);
+        let res: Result<$generic_name, Error> = $db_row.try_get(*$ind);
         match res {
-            Err(e) => return Err(e.to_string()),
+            Err(err) => return Err(format!("{:?}", err)),
             Ok(val) => {
-                *i += 1;
+                *$ind += 1;
                 val
             }
         }
     }};
 }
-//calculates amount of generics
-#[macro_export]
-macro_rules! generic_check {
-    ($g_count:expr,$genric_name:ident) => {
-        $g_count += 1;
-    };
-    ($g_count: expr,$generic_name:ident,$($g_name:ident),+) => {
-        generic_check!($g_count,$generic_name);
-        generic_check!($g_count,$($g_name),+);
-    };
 
+macro_rules! generic_count {
+    ($($g:ident),*) => {
+        generic_count!(@count $($g),*)
+    };
+    (@count) => { 0 };
+    (@count $head:ident $(, $tail:ident)*) => {
+        1 + generic_count!(@count $($tail),*)
+    };
 }
-//Added ability to create the fn name so the macro can be reused without compilation errors
-#[macro_export]
+
 macro_rules! build_list {
-    ($fn_name:ident,$($g_name:ident),+) => {
-        pub async fn $fn_name<'a,$($g_name:'static +  $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a>),+>(
+    ($fn_name:ident, $($g_name:ident),+) => {
+        pub async fn $fn_name<'a, $($g_name: $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a>),+>(
             query: &'a Result<Vec<tokio_postgres::Row>, Error>,
             file: &'static str,
             line: u32,
@@ -67,42 +52,33 @@ macro_rules! build_list {
             match query {
                 Err(err) => Err($crate::db_helper::handle_error(err,file,line).await),
                 Ok(query) => {
-                    //Checks query returned any data,
-                    if query.len() < 1 {
-                        let msg = "Unexpected DB response (rows)".to_string();
-                        $crate::db_helper::create_alert_ex(file, line, &msg).await;
-                        return Err(msg)
+                    if query.is_empty() {
+                        return Ok(vec![]);
                     }
                     let db_val = query.first().unwrap();
-                    if db_val.columns().len() < 1 {
+                    let columns = db_val.columns();
+                    if columns.len() != generic_count!($($g_name),+) {
                         let msg = "Unexpected DB response (columns)".to_string();
-                        $crate::db_helper::create_alert_ex(file, line, &msg).await;
+                        v_common::create_alert_ex(file,line,&msg).await;
                         return Err(msg);
                     }
-                    let mut num_generics = 0;
-                    generic_check!(num_generics,$($g_name),+);
-                    if num_generics < db_val.columns().len() {
-                        let msg = "Unexpected DB response (More columns than generics)".to_string();
-                        $crate::db_helper::create_alert_ex(file,line,&msg).await;
-                        return Err(msg);
-                    }
-                    let mut c = db_val.columns().iter();
-                    //Ensures Generic types match with database types
-                    let type_check = generic_type_checker!(c, $($g_name),+);
+                    let mut columns_iter = columns.iter();
+                    let type_check = generic_type_checker!(columns_iter, $($g_name),+);
                     match type_check {
-                        Err(e) => return Err(e),
+                        Err(msg) => {
+                            v_common::create_alert_ex(file, line, &msg).await;
+                            Err(msg)
+                        },
                         Ok(()) => {
-                            let mut result:Vec<($($g_name),+)> = Vec::with_capacity(query.len());
+                            let mut result: Vec<($($g_name),+)> = Vec::with_capacity(query.len());
                             for db_row in query {
-                                //iterates over columns in row without having to write boilerplate
-                                //for each type
                                 let mut i: usize = 0;
                                 let row_tuple = (
-                                    $(get_column_value!(i,db_row,$g_name),)+
+                                    $(get_column_value!(&mut i, db_row, $g_name),)+
                                 );
                                 result.push(row_tuple);
                             }
-                        Ok(result)
+                            Ok(result)
                         }
                     }
                 }
@@ -110,51 +86,42 @@ macro_rules! build_list {
         }
     };
 }
-//For results that only return one row, will return Err for 0 or greater than 1
-#[macro_export]
+
 macro_rules! build_tuple {
     ($fn_name:ident,$($g_name:ident),+) => {
-        pub async fn $fn_name<'a,$($g_name:'static +  $crate::db_helper::GetDbType + tokio_postgres::types::FromSql<'a>),+>(
-            query: &'a Result<Vec<tokio_postgres::Row>, Error>,
+        pub async fn $fn_name<'a,$($g_name: GetDbType + FromSql<'a>),+>(
+            query: &'a Result<Vec<Row>, Error>,
             file: &'static str,
             line: u32,
-        ) -> Result<($($g_name),+),String>{
+        ) -> Result<($($g_name),+), String>{
             match query {
-                Err(err) => Err($crate::db_helper::handle_error(err,file,line).await),
+                Err(err) => Err(handle_error(err,file,line).await),
                 Ok(query) => {
-                    //Checks query only returns a single row of data
                     if query.len() != 1 {
                         let msg = "Unexpected DB response (rows)".to_string();
-                        $crate::db_helper::create_alert_ex(file, line, &msg).await;
+                        v_common::create_alert_ex(file, line, &msg).await;
                         return Err(msg)
                     }
                     let db_val = query.first().unwrap();
-                    if db_val.columns().len() < 1 {
+                    let columns = db_val.columns();
+                    if columns.len() != generic_count!($($g_name),+) {
                         let msg = "Unexpected DB response (columns)".to_string();
-                        $crate::db_helper::create_alert_ex(file, line, &msg).await;
+                        v_common::create_alert_ex(file, line, &msg).await;
                         return Err(msg);
                     }
-                    let mut num_generics = 0;
-                    generic_check!(num_generics,$($g_name),+);
-                    if num_generics < db_val.columns().len() {
-                        let msg = "Unexpected DB response (More columns than generics)".to_string();
-                        $crate::db_helper::create_alert_ex(file,line,&msg).await;
-                        return Err(msg);
-                    }
-
-                    let mut c = db_val.columns().iter();
-                    //Ensures Generic types match with database types
-                    let type_check = generic_type_checker!(c, $($g_name),+);
+                    let mut columns_iter = columns.iter();
+                    let type_check = generic_type_checker!(columns_iter, $($g_name),+);
                     match type_check {
-                        Err(e) => return Err(e),
+                        Err(msg) => {
+                            v_common::create_alert_ex(file, line, &msg).await;
+                            Err(msg)
+                        },
                         Ok(()) => {
-                            //iterates over columns in row without having to write boilerplate
-                            //for each type
                             let mut i: usize = 0;
                             let row_tuple = (
-                                $(get_column_value!(i,db_val,$g_name),)+
+                                $(get_column_value!(&mut i, db_val, $g_name),)+
                             );
-                        Ok(row_tuple)
+                            Ok(row_tuple)
                         }
                     }
                 }
@@ -162,3 +129,62 @@ macro_rules! build_tuple {
         }
     };
 }
+
+build_tuple!(get_2_tuple_from_query,  T1, T2);
+build_tuple!(get_3_tuple_from_query,  T1, T2, T3);
+build_tuple!(get_4_tuple_from_query,  T1, T2, T3, T4);
+build_tuple!(get_5_tuple_from_query,  T1, T2, T3, T4, T5);
+build_tuple!(get_6_tuple_from_query,  T1, T2, T3, T4, T5, T6);
+build_tuple!(get_7_tuple_from_query,  T1, T2, T3, T4, T5, T6, T7);
+build_tuple!(get_8_tuple_from_query,  T1, T2, T3, T4, T5, T6, T7, T8);
+build_tuple!(get_9_tuple_from_query,  T1, T2, T3, T4, T5, T6, T7, T8, T9);
+build_tuple!(get_10_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+build_tuple!(get_11_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+build_tuple!(get_12_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+build_tuple!(get_13_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+build_tuple!(get_14_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+build_tuple!(get_15_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
+build_tuple!(get_16_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+build_tuple!(get_17_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17);
+build_tuple!(get_18_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18);
+build_tuple!(get_19_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19);
+build_tuple!(get_20_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20);
+build_tuple!(get_21_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21);
+build_tuple!(get_22_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22);
+build_tuple!(get_23_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23);
+build_tuple!(get_24_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24);
+build_tuple!(get_25_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25);
+build_tuple!(get_26_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26);
+build_tuple!(get_27_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27);
+build_tuple!(get_28_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28);
+build_tuple!(get_29_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28, T29);
+build_tuple!(get_30_tuple_from_query, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28, T29, T30);
+build_list!(get_2_list_from_query,    T1, T2);
+build_list!(get_3_list_from_query,    T1, T2, T3);
+build_list!(get_4_list_from_query,    T1, T2, T3, T4);
+build_list!(get_5_list_from_query,    T1, T2, T3, T4, T5);
+build_list!(get_6_list_from_query,    T1, T2, T3, T4, T5, T6);
+build_list!(get_7_list_from_query,    T1, T2, T3, T4, T5, T6, T7);
+build_list!(get_8_list_from_query,    T1, T2, T3, T4, T5, T6, T7, T8);
+build_list!(get_9_list_from_query,    T1, T2, T3, T4, T5, T6, T7, T8, T9);
+build_list!(get_10_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+build_list!(get_11_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+build_list!(get_12_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+build_list!(get_13_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+build_list!(get_14_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+build_list!(get_15_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
+build_list!(get_16_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+build_list!(get_17_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17);
+build_list!(get_18_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18);
+build_list!(get_19_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19);
+build_list!(get_20_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20);
+build_list!(get_21_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21);
+build_list!(get_22_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22);
+build_list!(get_23_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23);
+build_list!(get_24_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24);
+build_list!(get_25_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25);
+build_list!(get_26_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26);
+build_list!(get_27_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27);
+build_list!(get_28_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28);
+build_list!(get_29_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28, T29);
+build_list!(get_30_list_from_query,   T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28, T29, T30);
