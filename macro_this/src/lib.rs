@@ -20,10 +20,14 @@ macro_rules! generic_type_checker {
 }
 
 macro_rules! get_column_value {
-    ($ind:expr,$db_row:expr,$generic_name:ident) => {{
+    ($ind:expr,$db_row:expr,$generic_name:ident,$file:expr,$line:expr) => {{
         let res: Result<$generic_name, Error> = $db_row.try_get(*$ind);
         match res {
-            Err(err) => return Err(format!("{:?}", err)),
+            Err(err) => {
+                let msg = format!("{:?}", err);
+                v_common::create_alert_ex($file, $line, &msg).await;
+                return Err(msg)
+            },
             Ok(val) => {
                 *$ind += 1;
                 val
@@ -59,7 +63,7 @@ macro_rules! build_list {
                     let columns = db_val.columns();
                     if columns.len() != generic_count!($($g_name),+) {
                         let msg = "Unexpected DB response (columns)".to_string();
-                        v_common::create_alert_ex(file,line,&msg).await;
+                        v_common::create_alert_ex(file, line, &msg).await;
                         return Err(msg);
                     }
                     let mut columns_iter = columns.iter();
@@ -74,7 +78,7 @@ macro_rules! build_list {
                             for db_row in query {
                                 let mut i: usize = 0;
                                 let row_tuple = (
-                                    $(get_column_value!(&mut i, db_row, $g_name),)+
+                                    $(get_column_value!(&mut i, db_row, $g_name, file, line),)+
                                 );
                                 result.push(row_tuple);
                             }
@@ -119,7 +123,7 @@ macro_rules! build_tuple {
                         Ok(()) => {
                             let mut i: usize = 0;
                             let row_tuple = (
-                                $(get_column_value!(&mut i, db_val, $g_name),)+
+                                $(get_column_value!(&mut i, db_val, $g_name, file, line),)+
                             );
                             Ok(row_tuple)
                         }
